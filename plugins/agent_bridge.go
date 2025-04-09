@@ -9,12 +9,17 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"os/exec"
+	"context"
 
 	"github.com/TykTechnologies/tyk/ctx"
 	"github.com/TykTechnologies/tyk/log"
 	"github.com/TykTechnologies/tyk/user"
 
 	"github.com/getkin/kin-openapi/routers"
+
+	mcp "github.com/metoro-io/mcp-golang"
+  "github.com/metoro-io/mcp-golang/transport/stdio"
 )
 
 const (
@@ -247,4 +252,109 @@ func init() {
 	logger.Infof("[+] Initializing API Bridge Agnt plugin ...")
 }
 
-func main() {}
+
+type MCPServerConfig struct {
+	Command       string `json:"command"`
+	Args []string `json:"args"`
+	Env []string `json:"env"`
+}
+
+type MCPServerConfigs struct {
+	MCPServers map[string]MCPServerConfig `json:"mcpServers"`
+}
+
+var example_config = `
+{
+	"mcpServers": {
+		"github": {
+			"command": "docker",
+			"args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"],
+			"env": ["GITHUB_PERSONAL_ACCESS_TOKEN=1234"]
+		},
+		"docker": {
+			"command": "uvx",
+			"args": ["docker-mcp"]
+		}
+ 	}
+}
+`
+
+func getMCPConfig(mcpConfig string) (*MCPServerConfigs, error) {
+	config := &MCPServerConfigs{}
+	if err := json.Unmarshal([]byte(mcpConfig), config); err != nil {
+		return nil, fmt.Errorf("failed to parse MCP config file: %w", err)
+	}
+	return config, nil
+}
+
+func main() {
+	mcpConfigs, err := getMCPConfig(example_config)
+	if err != nil {
+		logger.Fatalf("unable to parse MCP configuration: %v", err)
+	}
+
+	logger.Infof("MCP Configuration: %#v", mcpConfigs)
+
+	cmd := exec.Command("docker", "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server",
+	)
+	cmd.Env = append(cmd.Env, "GITHUB_PERSONAL_ACCESS_TOKEN=XXX")
+  stdin, err := cmd.StdinPipe()
+  if err != nil {
+  	logger.Fatalf("Failed to get stdin pipe: %v", err)
+  }
+	stdout, err := cmd.StdoutPipe()
+  if err != nil {
+  	logger.Fatalf("Failed to get stdout pipe: %v", err)
+  }
+
+	if err := cmd.Start(); err != nil {
+		logger.Fatalf("Failed to start command: %v", err)
+	}
+	defer cmd.Process.Kill()
+
+	logger.Infof("Started MCP server")
+
+
+	transport := stdio.NewStdioServerTransportWithIO(stdout, stdin)
+	client := mcp.NewClient(transport)
+
+	if _, err := client.Initialize(context.Background()); err != nil {
+		logger.Fatalf("Failed to initialize client: %v", err)
+	}
+
+	logger.Infof("Client initialized")
+
+	tools, err := client.ListTools(context.TODO(), nil)
+	if err != nil {
+		logger.Fatalf("unable to get list of tools: %v", err)
+	}
+	logger.Infof("List of available tools")
+	for _, tool := range tools.Tools {
+		logger.Infof("* %s - %s", tool.Name, *tool.Description)
+		if tool.Name == "list_commits" {
+			j, err := json.Marshal(tool.InputSchema)
+			if err != nil {
+				logger.Fatalf("Failed to marshal input schema: %v", err)
+			}
+			logger.Infof("Input Schema: %s", j)
+		}
+	}
+
+
+	args := map[string]any {
+		"owner": "jubarbot-cisco",
+		"repo": "agntcy-api-bridge-agnt",
+	}
+
+	toolResponse, err := client.CallTool(context.TODO(), "list_commits", args)
+	if err != nil {
+		logger.Fatalf("Error while doing MCP tool calling: %v", err)
+	}
+
+	logger.Infof("Response: %s", toolResponse.Content[0].TextContent.Text)
+}
