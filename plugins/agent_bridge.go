@@ -268,12 +268,7 @@ func QueryEndpointSelection(rw http.ResponseWriter, r *http.Request) {
 
 func init() {
 	logger.Infof("[+] Initializing API Bridge Agnt plugin (APIs)...")
-
-	// Init Redis store, if needed
-	if agentBridgeStore == nil {
-		agentBridgeStore = getStorageForPlugin(context.TODO())
-	}
-
+	agentBridgeStore = getStorageForPlugin(context.Background())
 }
 
 func main() {}

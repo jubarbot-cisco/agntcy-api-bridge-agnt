@@ -257,7 +257,7 @@ func initPluginFromRequest(apiId string, apiDef *oas.OAS) (*PluginDataConfig, er
 	pluginDataConfig.ListenPath = gateway.Server.ListenPath.Value
 
 	// Save the plugin data config to the Redis store
-	if err := saveApiUterances(apiId, pluginDataConfig); err != nil {
+	if err := saveApiUtterances(apiId, pluginDataConfig); err != nil {
 		logger.Fatalf("[+] failed to save plugin data config to redis store: %s", err)
 		return pluginDataConfig, err
 	}
@@ -366,7 +366,7 @@ func deletePluginConfig(apiId string) {
 
 	logger.Debugf("[+] Deleting api id: %s", apiId)
 	if _, present := pluginConfig[apiId]; present {
-		err := deleteApiUterances(apiId, pluginConfig[apiId])
+		err := deleteApiUtterances(apiId, pluginConfig[apiId])
 		if err != nil {
 			logger.Errorf("[+] Error while deleting utterances for api id %s: %s", apiId, err)
 			return

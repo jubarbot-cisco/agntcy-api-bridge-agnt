@@ -38,10 +38,11 @@ func getStorageForPlugin(ctx context.Context) *storage.RedisCluster {
 
 	handler := &storage.RedisCluster{KeyPrefix: AGENT_BRIDGE_DEFAULT_KEY_PREFIX, ConnectionHandler: rc}
 	handler.Connect()
+
 	return handler
 }
 
-func saveApiUterances(apiID string, pluginDataConfig *PluginDataConfig) error {
+func saveApiUtterances(apiID string, pluginDataConfig *PluginDataConfig) error {
 	pluginConfigLock.Lock()
 	defer pluginConfigLock.Unlock()
 
@@ -79,7 +80,7 @@ func saveApiUterances(apiID string, pluginDataConfig *PluginDataConfig) error {
 	return nil
 }
 
-func deleteApiUterances(apiID string, pluginDataConfig *PluginDataConfig) error {
+func deleteApiUtterances(apiID string, pluginDataConfig *PluginDataConfig) error {
 	if pluginDataConfig == nil {
 		return fmt.Errorf("pluginDataConfig is nil")
 	}
