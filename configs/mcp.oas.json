@@ -32,8 +32,14 @@
                   ]
                 },
                 "git": {
-                  "command": "python",
-                  "args": ["../servers/git/src/mcp_server_git/server.py", "--repository", "/media/sf_vmshared/api-bridge-agnt"]
+                  "command": "poetry",
+                  "args": [
+                    "run",
+                    "python",
+                    "../../../mcp/servers/git/src/mcp_server_git/server.py", 
+                    "--repository", 
+                    "/media/sf_vmshared/api-bridge-agnt"
+                  ]
                 },
                 "github": {
                   "command": "docker",
