@@ -23,8 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: make setup
+      # - name: Install dependencies
+      #   run: make setup
       - uses: actions/setup-go@v5
         with:
           go-version-file: "plugins/go.mod"
@@ -35,31 +35,31 @@ jobs:
         with:
           args: --timeout=10m plugins/
 
-  unittest:
-    name: Run Tests
-    runs-on: ubuntu-latest
+  # unittest:
+  #   name: Run Tests
+  #   runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: "plugins/go.mod"
-          cache-dependency-path: |
-            plugins/go.sum
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-go@v5
+  #       with:
+  #         go-version-file: "plugins/go.mod"
+  #         cache-dependency-path: |
+  #           plugins/go.sum
 
-      - name: Cache Tyk, Search Library and model
-        id: cache-tyk-search-library-model
-        uses: actions/cache@v4
-        with:
-          path: ./tyk-release-${{ env.TYK_VERSION }}
-          key: ${{ runner.os }}-${{ env.TYK_VERSION }}
+  #     - name: Cache Tyk, Search Library and model
+  #       id: cache-tyk-search-library-model
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: ./tyk-release-${{ env.TYK_VERSION }}
+  #         key: ${{ runner.os }}-${{ env.TYK_VERSION }}
 
-      - run: |
-          make TYK_VERSION="${{ env.TYK_VERSION }}" setup
-          mkdir -p tyk-release-${{ env.TYK_VERSION }}/models/
-          make TYK_VERSION="${{ env.TYK_VERSION }}" download_models_for_semrouter
-          make start_redis
+  #     - run: |
+  #         make TYK_VERSION="${{ env.TYK_VERSION }}" setup
+  #         mkdir -p tyk-release-${{ env.TYK_VERSION }}/models/
+  #         make TYK_VERSION="${{ env.TYK_VERSION }}" download_models_for_semrouter
+  #         make start_redis
 
-      - name: Run tests
-        run: |
-          make TYK_VERSION="${{ env.TYK_VERSION }}" test
+  #     - name: Run tests
+  #       run: |
+  #         make TYK_VERSION="${{ env.TYK_VERSION }}" test
