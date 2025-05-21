@@ -49,22 +49,6 @@ type TmplPromptResponse struct {
 	UserRequest  string // The user request
 }
 
-func shouldRewriteQuery(r *http.Request) bool {
-	enabled_header := trimAndLower(r.Header.Get(HEADER_X_NL_QUERY_ENABLED))
-	if enabled_header == "" {
-		return false
-	}
-
-	// We only want to rewrite the query if the content type is not set or is text/plain
-	contentType := strings.ToLower(r.Header.Get("Content-Type"))
-	if contentType != "" && contentType != "text/plain" {
-		logger.Debugf("[+] We were asked to rewrite the query but the Content-Type is not text/plain, ignoring ...")
-		return false
-	}
-
-	return isEnabled(enabled_header)
-}
-
 func getRoute(req *http.Request) (*routers.Route, map[string]string, error) {
 	oasDef := getOASDefinition(req)
 	if oasDef == nil {
@@ -171,28 +155,8 @@ func getOriginalNLQuery(r *http.Request) string {
 		return ""
 	}
 
-	nlQuery := session.MetaData["NLQuery"].(string)
+	nlQuery := session.MetaData[METADATA_NLQ].(string)
 	return nlQuery
-}
-
-func shouldRewriteResponseToNl(r *http.Request) bool {
-	session := ctx.GetSession(r)
-	if session == nil {
-		return false
-	}
-
-	response_type := trimAndLower(session.MetaData[METADATA_RESPONSE_TYPE].(string))
-
-	return response_type == RESPONSE_TYPE_NL
-}
-
-func trimAndLower(s string) string {
-	return strings.Trim(strings.ToLower(s), " ")
-}
-
-func isEnabled(s string) bool {
-	ENABLED_VALUES := []string{"true", "yes", "1", "ok"}
-	return slices.Contains(ENABLED_VALUES, strings.ToLower(s))
 }
 
 func stripListenPath(listenPath string, path string) string {
