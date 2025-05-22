@@ -76,7 +76,6 @@ func processACP(rw http.ResponseWriter, r *http.Request) {
 	session := &user.SessionState{
 		MetaData: map[string]any{
 			METADATA_NLQ:           string(nlq),
-			METADATA_RESPONSE_TYPE: RESPONSE_TYPE_NL,
 		},
 	}
 	ctx.SetSession(r, session, true)

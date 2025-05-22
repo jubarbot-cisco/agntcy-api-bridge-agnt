@@ -22,11 +22,7 @@ import (
 const (
 	CONTENT_TYPE_NLQ          = "application/nlq"
 	HEADER_X_NL_QUERY_ENABLED = "X-Nl-Query-Enabled"
-	HEADER_X_NL_RESPONSE_TYPE = "X-Nl-Response-Type"
 	HEADER_X_NL_CONFIG        = "X-Nl-Config"
-
-	RESPONSE_TYPE_NL       = "nl"       // Rewrite the response to Natural Language
-	RESPONSE_TYPE_UPSTREAM = "upstream" // Keep the response as it is
 
 	INTERNAL_ERROR_MSG = "I'm sorry, but I wasn't able to process your request, it's an internal error"
 	NO_SERVICE_FOUND   = "No service available to answer the request"
@@ -39,15 +35,13 @@ const (
 )
 
 const (
-	METADATA_NLQ           = "NLQuery"
-	METADATA_RESPONSE_TYPE = "ResponseType"
+	METADATA_NLQ = "NLQuery"
 )
 
 var logger = log.Get()
 
 func APIBridgeAgent(rw http.ResponseWriter, r *http.Request) {
 	logger.Debugf("[+] Entering main entry point APIBridgeAgent")
-	// POST /api-bridge-agent/listen_path_ap1 -H 'HEADER_X_NL_CONFIG: Anything'
 
 	router := mux.NewRouter()
 
@@ -55,8 +49,11 @@ func APIBridgeAgent(rw http.ResponseWriter, r *http.Request) {
 	router.HandleFunc("/api-bridge-agent/mcp", processMCP).Methods(http.MethodPost).Headers("Content-Type", CONTENT_TYPE_NLQ)
 	router.HandleFunc("/api-bridge-agent/aba", processACP).Methods(http.MethodPost).Headers("Content-Type", CONTENT_TYPE_NLQ)
 
+	// Per API configuration
+	router.PathPrefix("/").HandlerFunc(processPluginConfig).Methods(http.MethodDelete, http.MethodPut).Headers(HEADER_X_NL_CONFIG, "")
+
 	// Catchall to real APIs
-	router.PathPrefix("/").HandlerFunc(processPluginConfig).Methods(http.MethodDelete, http.MethodPut).Headers("HEADER_X_NL_CONFIG", "")
+	router.PathPrefix("/").HandlerFunc(selectAndRewrite).Headers(HEADER_X_NL_QUERY_ENABLED, "")
 	router.PathPrefix("/").HandlerFunc(selectAndRewrite).Methods(http.MethodPost).Headers("Content-Type", CONTENT_TYPE_NLQ)
 
 	var match mux.RouteMatch
@@ -130,11 +127,20 @@ func selectAndRewrite(rw http.ResponseWriter, r *http.Request) {
 
 	session := &user.SessionState{
 		MetaData: map[string]any{
-			METADATA_NLQ:           string(nlq),
-			METADATA_RESPONSE_TYPE: RESPONSE_TYPE_NL,
+			METADATA_NLQ: string(nlq),
 		},
 	}
 	ctx.SetSession(r, session, true)
+
+	if r.Header.Get(HEADER_X_NL_QUERY_ENABLED) != "" {
+		err = rewriteQuery(r)
+		if err != nil {
+			logger.Errorf("[+] Error rewriting the query: %s", err)
+			http.Error(rw, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		return
+	}
 
 	matchingOperation, matchingScore, err := findSelectOperation(apiConfig.APIID, nlq)
 	if err != nil {
@@ -179,46 +185,6 @@ func selectAndRewrite(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func RewriteQueryToOas(rw http.ResponseWriter, r *http.Request) {
-	_, err := getPluginFromRequest(r)
-	if err != nil {
-		http.Error(rw, INTERNAL_ERROR_MSG, http.StatusInternalServerError)
-		return
-	}
-
-	if !shouldRewriteQuery(r) {
-		logger.Debugf("[+] We were not asked to rewrite the query, ignoring ...")
-		r.Header.Del(HEADER_X_NL_QUERY_ENABLED)
-		return
-	}
-	r.Header.Del(HEADER_X_NL_QUERY_ENABLED)
-
-	// Save useful information in the session in order to be able to rewrite the response
-	nlSentence, err := io.ReadAll(r.Body)
-	if err != nil {
-		logger.Errorf("[+] Error while reading the body: %s", err)
-		http.Error(rw, INTERNAL_ERROR_MSG, http.StatusInternalServerError)
-		return
-	}
-	session := &user.SessionState{
-		MetaData: map[string]any{
-			METADATA_NLQ:           string(nlSentence),
-			METADATA_RESPONSE_TYPE: r.Header.Get(HEADER_X_NL_RESPONSE_TYPE),
-		},
-	}
-	r.Header.Del(HEADER_X_NL_RESPONSE_TYPE)
-	ctx.SetSession(r, session, true)
-
-	logger.Debug("[+] Rewriting Natural language query ...")
-
-	err = rewriteQuery(r)
-	if err != nil {
-		logger.Errorf("[+] Error rewriting the query: %s", err)
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
 func RewriteResponseToNl(rw http.ResponseWriter, res *http.Response, req *http.Request) {
 	_, err := getPluginFromRequest(req)
 	if err != nil {
@@ -226,8 +192,11 @@ func RewriteResponseToNl(rw http.ResponseWriter, res *http.Response, req *http.R
 		return
 	}
 
-	if !shouldRewriteResponseToNl(req) {
-		logger.Debugf("[+] We were not asked to rewrite the response, ignoring ...")
+	session := ctx.GetSession(req)
+	if session == nil {
+		return
+	}
+	if _, present := session.MetaData[METADATA_NLQ]; !present {
 		return
 	}
 
